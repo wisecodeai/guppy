@@ -38,8 +38,10 @@ class ConnectedFilter extends React.Component {
     let filterStatusArray = [];
     let filtersApplied = {};
     if (this.props.userFilterFromURL && Object.keys(this.props.userFilterFromURL).length > 0) {
-      filterStatusArray = buildFilterStatusForURLFilter(this.props.userFilterFromURL,
-        this.getTabsWithSearchFields());
+      filterStatusArray = buildFilterStatusForURLFilter(
+        this.props.userFilterFromURL,
+        this.getTabsWithSearchFields(),
+      );
       filtersApplied = this.props.userFilterFromURL;
       initialFilter = mergeFilters(this.props.userFilterFromURL, this.props.adminAppliedPreFilters);
     }
@@ -118,8 +120,10 @@ class ConnectedFilter extends React.Component {
     this.setState({ adminAppliedPreFilters: JSON.parse(this.adminPreFiltersFrozen) });
     const mergedFilterResults = mergeFilters(filterResults, JSON.parse(this.adminPreFiltersFrozen));
 
-    const newFilterStatusArray = buildFilterStatusForURLFilter(mergedFilterResults,
-      this.getTabsWithSearchFields());
+    const newFilterStatusArray = buildFilterStatusForURLFilter(
+      mergedFilterResults,
+      this.getTabsWithSearchFields(),
+    );
 
     this.setState({ filtersApplied: mergedFilterResults, filterStatusArray: newFilterStatusArray });
     askGuppyForAggregationData(
@@ -151,6 +155,7 @@ class ConnectedFilter extends React.Component {
     return newTabs;
   }
 
+  // eslint-disable-next-line react/no-unused-class-component-methods
   setFilter(filter) {
     if (this.filterGroupRef.current) {
       this.filterGroupRef.current.resetFilter();
@@ -169,6 +174,13 @@ class ConnectedFilter extends React.Component {
     const filtersToDisplay = this.state.filtersApplied;
     if (this.props.hidden) return null;
     let processedTabsOptions = this.props.onProcessFilterAggsData(this.state.receivedAggsData);
+
+    // Get filter values
+    const allFilterValues = this.props.filterConfig.tabs.reduce(
+      (accumulator, tab) => ([...accumulator, ...tab.fields]),
+      [],
+    );
+
     if (Object.keys(this.initialTabsOptions).length === 0) {
       this.initialTabsOptions = processedTabsOptions;
     }
@@ -179,6 +191,7 @@ class ConnectedFilter extends React.Component {
       filtersToDisplay,
       // for tiered access filters
       this.props.tierAccessLimit ? this.props.accessibleFieldCheckList : [],
+      allFilterValues,
     );
 
     if (Object.keys(filtersToDisplay).length) {
@@ -244,18 +257,27 @@ class ConnectedFilter extends React.Component {
         }
       });
       // -------
-      processedTabsOptions = mergeTabOptions(sortTabsOptions(selectedTabsOptions),
-        sortTabsOptions(unselectedTabsOptions));
+      processedTabsOptions = mergeTabOptions(
+        sortTabsOptions(selectedTabsOptions),
+        sortTabsOptions(unselectedTabsOptions),
+      );
     } else {
       processedTabsOptions = sortTabsOptions(processedTabsOptions);
     }
     if (!processedTabsOptions || Object.keys(processedTabsOptions).length === 0) return null;
     const { fieldMapping } = this.props;
     const tabs = this.props.filterConfig.tabs.map(({ fields, searchFields }, index) => {
-      const sections = getFilterSections(fields, searchFields, fieldMapping, processedTabsOptions,
-        this.state.initialAggsData, this.state.adminAppliedPreFilters,
-        this.props.guppyConfig, this.arrayFields,
-        this.props.filterValuesToHide);
+      const sections = getFilterSections(
+        fields,
+        searchFields,
+        fieldMapping,
+        processedTabsOptions,
+        this.state.initialAggsData,
+        this.state.adminAppliedPreFilters,
+        this.props.guppyConfig,
+        this.arrayFields,
+        this.props.filterValuesToHide,
+      );
       const filterStatus = this.state.filterStatusArray
         ? this.state.filterStatusArray[index] : null;
       return (

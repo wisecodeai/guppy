@@ -246,6 +246,21 @@ class ES {
                 console.log(errMsg);
               }
             });
+            {/*const fieldArr = field.split('.');
+            if (!(this.fieldTypes[index][field]
+              || (
+                fieldArr.length > 1
+                && _.has(
+                  this.fieldTypes[index],
+                  fieldArr.join('.properties.'),
+                )
+              )
+            )) {
+              const errMsg = `[ES.initialize] wrong array entry from config: field "${field}" not found in index ${index}, skipped.`;
+              log.error(errMsg);
+              return;
+            }*/}
+
             if (!arrayFields[index]) arrayFields[index] = [];
             arrayFields[index].push(field);
           });
@@ -447,9 +462,49 @@ class ES {
   async getCount(esIndex, esType, filter) {
     const result = await this.filterData(
       { esInstance: this, esIndex, esType },
-      { filter, fields: false },
+      { filter, fields: false, size: 0 },
     );
     return result.hits.total;
+  }
+
+  async getFieldCount(esIndex, esType, filter, field) {
+    const queryBody = {
+      size: 0,
+      aggs: {
+        [field]: {
+          value_count: {
+            field,
+          },
+        },
+      },
+    };
+    if (typeof filter !== 'undefined') {
+      queryBody.query = getFilterObj(this, esIndex, filter);
+    }
+
+    const result = await this.query(esIndex, esType, queryBody);
+    return result.aggregations[field].value;
+  }
+
+  // eslint-disable-next-line camelcase
+  async getCardinalityCount(esIndex, esType, filter, field, precision_threshold) {
+    const queryBody = {
+      size: 0,
+      aggs: {
+        cardinality_count: {
+          cardinality: {
+            field,
+            precision_threshold, // eslint-disable-line camelcase
+          },
+        },
+      },
+    };
+    if (typeof filter !== 'undefined') {
+      queryBody.query = getFilterObj(this, esIndex, filter);
+    }
+
+    const result = await this.query(esIndex, esType, queryBody);
+    return result.aggregations.cardinality_count.value;
   }
 
   async getData({

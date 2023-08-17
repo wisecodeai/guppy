@@ -160,7 +160,7 @@ const getAggregationSchemaForOneIndex = (esInstance, esConfigElement) => {
   }));
   const fieldAggsNestedTypeMap = fieldGQLTypeMap.filter((f) => f.esType === 'nested');
   return `type ${esTypeObjName}Aggregation {
-    _totalCount: Int
+    _totalCount: Int,
     ${fieldAggsTypeMap.map((entry) => `${getAggregationType(entry)}`).join('\n')}
     ${fieldAggsNestedTypeMap.map((entry) => `${entry.field}: NestedHistogramFor${firstLetterUpperCase(entry.field)}`).join('\n')}
   }`;
@@ -228,6 +228,8 @@ export const getAggregationSchemaForEachNestedType = (esConfig, esInstance) => e
 
 const getNumberHistogramSchema = (isRegularAccess) => `
     type ${(isRegularAccess ? histogramTypePrefix : '') + EnumAggsHistogramName.HISTOGRAM_FOR_NUMBER} {
+      _totalCount: Int,
+      _cardinalityCount(precision_threshold: Int = 3000): Int,
       histogram(
         rangeStart: Int,
         rangeEnd: Int,
@@ -240,7 +242,10 @@ const getNumberHistogramSchema = (isRegularAccess) => `
 
 const getTextHistogramSchema = (isRegularAccess) => `
     type ${(isRegularAccess ? histogramTypePrefix : '') + EnumAggsHistogramName.HISTOGRAM_FOR_STRING} {
-      histogram: [BucketsForNestedStringAgg]
+      _totalCount: Int,
+      _cardinalityCount(precision_threshold: Int = 3000): Int,
+      histogram: [BucketsForNestedStringAgg],
+      asTextHistogram: [BucketsForNestedStringAgg]
     }
   `;
 
@@ -298,8 +303,10 @@ export const buildSchemaString = (esConfig, esInstance) => {
 
   const aggregationSchemasForEachType = getAggregationSchemaForEachType(esConfig, esInstance);
 
-  const aggregationSchemasForEachNestedType = getAggregationSchemaForEachNestedType(esConfig,
-    esInstance);
+  const aggregationSchemasForEachNestedType = getAggregationSchemaForEachNestedType(
+    esConfig,
+    esInstance,
+  );
 
   const histogramSchemas = getHistogramSchemas();
 
@@ -336,6 +343,7 @@ export const buildSchemaString = (esConfig, esInstance) => {
   const nestedTermsFieldsBucketSchema = `
     type BucketsForNestedTermsFields {
       field: String
+      count: Int
       terms: [BucketsForString]
     }
   `;
