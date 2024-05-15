@@ -1,13 +1,6 @@
 import flat from 'flat';
 import { queryGuppyForRawDataAndTotalCounts } from '../Utils/queries';
 
-export const getFilterGroupConfig = (filterConfig) => ({
-  tabs: filterConfig.tabs.map((t) => ({
-    title: t.title,
-    fields: t.filters.map((f) => f.field),
-  })),
-});
-
 const getSingleFilterOption = (histogramResult, initHistogramRes, filterValuesToHide) => {
   if (!histogramResult || !histogramResult.histogram) {
     throw new Error(`Error parsing field options ${JSON.stringify(histogramResult)}`);
@@ -28,14 +21,14 @@ const getSingleFilterOption = (histogramResult, initHistogramRes, filterValuesTo
     });
     return rangeOptions;
   }
-  let rawtextOptions = histogramResult.histogram;
+  let rawTextOptions = histogramResult.histogram;
   // hide filterValuesToHide from filters
   // filterValuesToHide added to guppyConfig in data-portal
   if (filterValuesToHide.length > 0) {
-    rawtextOptions = histogramResult.histogram
+    rawTextOptions = histogramResult.histogram
       .filter((item) => filterValuesToHide.indexOf(item.key) < 0);
   }
-  const textOptions = rawtextOptions.map((item) => ({
+  const textOptions = rawTextOptions.map((item) => ({
     text: item.key,
     filterType: 'singleSelect',
     count: item.count,
@@ -51,7 +44,7 @@ const capitalizeFirstLetter = (str) => {
 
 // createSearchFilterLoadOptionsFn creates a handler function that loads the search filter's
 // autosuggest options as the user types in the search filter.
-const createSearchFilterLoadOptionsFn = (field, guppyConfig) => (searchString, offset) => {
+const createSearchFilterLoadOptionsFn = (field, guppyConfig, csrfToken) => (searchString, offset) => {
   const NUM_SEARCH_OPTIONS = 20;
   return new Promise((resolve, reject) => {
     // If searchString is empty return just the first NUM_SEARCH_OPTIONS options.
@@ -76,6 +69,7 @@ const createSearchFilterLoadOptionsFn = (field, guppyConfig) => (searchString, o
       offset,
       NUM_SEARCH_OPTIONS,
       'accessible',
+      csrfToken,
     )
       .then((res) => {
         if (!res.data || !res.data[guppyConfig.type]) {
@@ -109,7 +103,7 @@ export const checkIsArrayField = (field, arrayFields) => {
 };
 
 export const getFilterSections = (
-  fields,
+  aggFields,
   searchFields,
   fieldMapping,
   tabsOptions,
@@ -118,6 +112,7 @@ export const getFilterSections = (
   guppyConfig,
   arrayFields,
   filterValuesToHide,
+  csrfToken,
 ) => {
   let searchFieldSections = [];
 
@@ -151,12 +146,12 @@ export const getFilterSections = (
         title: label,
         options: selectedOptions,
         isSearchFilter: true,
-        onSearchFilterLoadOptions: createSearchFilterLoadOptionsFn(field, guppyConfig),
+        onSearchFilterLoadOptions: createSearchFilterLoadOptionsFn(field, guppyConfig, csrfToken),
       };
     });
   }
 
-  const sections = fields.map((field) => {
+  const sections = aggFields.map((field) => {
     const overrideName = fieldMapping.find((entry) => (entry.field === field));
     const label = overrideName ? overrideName.name : capitalizeFirstLetter(field);
 
@@ -189,7 +184,7 @@ export const excludeSelfFilterFromAggsData = (receivedAggsData, filterResults) =
   const resultAggsData = {};
   const flattenAggsData = flat(receivedAggsData, { safe: true });
   Object.keys(flattenAggsData).forEach((field) => {
-    const actualFieldName = field.replace('.asTextHistogram', '');
+    const actualFieldName = field.replace('.histogram', '').replace('.asTextHistogram', '');
     const histogram = flattenAggsData[`${field}`];
     if (!histogram) return;
     if (actualFieldName in filterResults) {

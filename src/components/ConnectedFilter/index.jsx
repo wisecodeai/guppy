@@ -10,7 +10,6 @@ import {
 } from './utils';
 import { ENUM_ACCESSIBILITY } from '../Utils/const';
 import {
-  askGuppyAboutAllFieldsAndOptions,
   askGuppyAboutArrayTypes,
   askGuppyForAggregationData,
   getAllFieldsFromFilterConfigs,
@@ -28,10 +27,13 @@ class ConnectedFilter extends React.Component {
     super(props);
 
     const filterConfigsFields = getAllFieldsFromFilterConfigs(props.filterConfig.tabs);
-    let allFields = props.accessibleFieldCheckList
-      ? _.union(filterConfigsFields, props.accessibleFieldCheckList)
-      : filterConfigsFields;
-    allFields = _.union(allFields, this.props.extraAggsFields);
+    const filterConfigsRegularAggFields = filterConfigsFields.fields || [];
+    const filterConfigsAsTextAggFields = filterConfigsFields.asTextAggFields || [];
+    const allRegularAggFields = props.accessibleFieldCheckList
+      ? _.union(filterConfigsRegularAggFields, props.accessibleFieldCheckList)
+      : filterConfigsRegularAggFields;
+    // props.extraAggsFields are chart fields, use asTextAgg for all of them
+    const allAsTextAggFields = _.union(filterConfigsAsTextAggFields, this.props.extraAggsFields);
 
     this.initialTabsOptions = {};
     let initialFilter = this.props.adminAppliedPreFilters;
@@ -47,7 +49,8 @@ class ConnectedFilter extends React.Component {
     }
 
     this.state = {
-      allFields,
+      allRegularAggFields,
+      allAsTextAggFields,
       initialAggsData: {},
       receivedAggsData: {},
       accessibility: ENUM_ACCESSIBILITY.ALL,
@@ -68,12 +71,14 @@ class ConnectedFilter extends React.Component {
     if (this.props.onFilterChange) {
       this.props.onFilterChange(this.state.adminAppliedPreFilters, this.state.accessibility);
     }
-    askGuppyAboutAllFieldsAndOptions(
+    askGuppyForAggregationData(
       this.props.guppyConfig.path,
       this.props.guppyConfig.type,
-      this.state.allFields,
-      this.state.accessibility,
+      this.state.allRegularAggFields,
+      this.state.allAsTextAggFields,
       this.state.filter,
+      this.state.accessibility,
+      this.props.csrfToken,
     )
       .then((res) => {
         if (!res.data) {
@@ -108,7 +113,7 @@ class ConnectedFilter extends React.Component {
   }
 
   /**
-   * Handler function that is called everytime filter changes
+   * Handler function that is called every time filter changes
    * What this function does:
    * 1. Ask guppy for aggregation data using (processed) filter
    * 2. After get aggregation response, call `handleReceiveNewAggsData` handler
@@ -129,9 +134,11 @@ class ConnectedFilter extends React.Component {
     askGuppyForAggregationData(
       this.props.guppyConfig.path,
       this.props.guppyConfig.type,
-      this.state.allFields,
+      this.state.allRegularAggFields,
+      this.state.allAsTextAggFields,
       mergedFilterResults,
       this.state.accessibility,
+      this.props.csrfToken,
     )
       .then((res) => {
         this.handleReceiveNewAggsData(
@@ -146,11 +153,13 @@ class ConnectedFilter extends React.Component {
   }
 
   getTabsWithSearchFields() {
-    const newTabs = this.props.filterConfig.tabs.map(({ title, fields, searchFields }) => {
+    const newTabs = this.props.filterConfig.tabs.map(({
+      title, fields, searchFields, asTextAggFields = [],
+    }) => {
       if (searchFields) {
-        return { title, fields: searchFields.concat(fields) };
+        return { title, fields: searchFields.concat(fields).concat(asTextAggFields) };
       }
-      return { title, fields };
+      return { title, fields: fields.concat(asTextAggFields) };
     });
     return newTabs;
   }
@@ -177,7 +186,7 @@ class ConnectedFilter extends React.Component {
 
     // Get filter values
     const allFilterValues = this.props.filterConfig.tabs.reduce(
-      (accumulator, tab) => ([...accumulator, ...tab.fields]),
+      (accumulator, tab) => ([...accumulator, ...tab.fields, ...tab.asTextAggFields || []]),
       [],
     );
 
@@ -266,9 +275,10 @@ class ConnectedFilter extends React.Component {
     }
     if (!processedTabsOptions || Object.keys(processedTabsOptions).length === 0) return null;
     const { fieldMapping } = this.props;
-    const tabs = this.props.filterConfig.tabs.map(({ fields, searchFields }, index) => {
+    const tabs = this.props.filterConfig.tabs.map(({ fields, searchFields, asTextAggFields = [] }, index) => {
+      const aggFields = _.union(fields, asTextAggFields);
       const sections = getFilterSections(
-        fields,
+        aggFields,
         searchFields,
         fieldMapping,
         processedTabsOptions,
@@ -277,6 +287,7 @@ class ConnectedFilter extends React.Component {
         this.props.guppyConfig,
         this.arrayFields,
         this.props.filterValuesToHide,
+        this.props.csrfToken,
       );
       const filterStatus = this.state.filterStatusArray
         ? this.state.filterStatusArray[index] : null;
@@ -335,6 +346,7 @@ ConnectedFilter.propTypes = {
     tabs: PropTypes.arrayOf(PropTypes.shape({
       title: PropTypes.string,
       fields: PropTypes.arrayOf(PropTypes.string),
+      asTextAggFields: PropTypes.arrayOf(PropTypes.string),
       searchFields: PropTypes.arrayOf(PropTypes.string),
     })),
   }).isRequired,
@@ -362,6 +374,7 @@ ConnectedFilter.propTypes = {
   userFilterFromURL: PropTypes.object,
   hideEmptyFilterSection: PropTypes.bool,
   filterValuesToHide: PropTypes.arrayOf(PropTypes.string),
+  csrfToken: PropTypes.string,
 };
 
 ConnectedFilter.defaultProps = {
@@ -382,6 +395,7 @@ ConnectedFilter.defaultProps = {
   userFilterFromURL: {},
   hideEmptyFilterSection: false,
   filterValuesToHide: [],
+  csrfToken: '',
 };
 
 export default ConnectedFilter;
